@@ -74,18 +74,23 @@ def main():
     simulate_non_contiguous(processes)
     print
     simulate_vm(page_references, LFU)
+    print
+    simulate_vm(page_references, LRU)
 
 
 def simulate_vm(page_references, algorithm):
     memory = [None] * F
     usages = {}
+    last_usage = {}
     page_faults = 0
 
     print "Simulating %s with fixed frame size of %d" % (algorithm, F)
-    for ref in page_references:
+    for i in range(len(page_references)):
+        ref = page_references[i]
+        last_usage[ref] = i
         if ref not in usages:
             usages[ref] = 1
-            victim_i = choose_victim(memory, usages, algorithm)
+            victim_i = choose_victim(memory, usages, last_usage, algorithm)
             victim = memory[victim_i]
             if victim is not None:
                 del usages[victim]
@@ -99,13 +104,19 @@ def simulate_vm(page_references, algorithm):
     print "End of %s simulation (%d page faults)" % (algorithm, page_faults)
 
 
-def choose_victim(memory, usages, algorithm):
+def choose_victim(memory, usages, last_usage, algorithm):
     victim_i = None
     for i in range(F):
         if memory[i] is None:
             return i
-        if victim_i is None or usages[memory[victim_i]] > usages[memory[i]]:
+        if victim_i is None:
             victim_i = i
+        elif algorithm == LFU:
+            if usages[memory[victim_i]] > usages[memory[i]]:
+                victim_i = i
+        elif algorithm == LRU:
+            if last_usage[memory[victim_i]] > last_usage[memory[i]]:
+                victim_i = i
     return victim_i
 
 
