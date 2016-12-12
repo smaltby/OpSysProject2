@@ -87,38 +87,49 @@ def simulate_vm(page_references, algorithm):
     page_faults = 0
 
     def find_next_usage(start_i, ref):
+        # Find when the reference will next be used, starting from the indicated index
         for i in range(start_i, len(page_references)):
             if page_references[i] == ref:
                 return i
         return len(page_references)
 
     def choose_victim(start_i):
+        # Choose a victim to be replaced, base on the algorithm being used
         victim_i = None
         victim_next_usage = None
         for i in range(F):
+            # If memory is empty, immediately return it
             if memory[i] is None:
                 return i
             if victim_i is None:
+                # If no victim is currently selected, select it, no comparisons are needed yet
                 victim_i = i
                 if algorithm == OPT:
                     victim_next_usage = find_next_usage(start_i, memory[victim_i])
             elif algorithm == LFU:
+                # Select memory as the victim if it was used less than the currently selected victim
                 if usages[memory[victim_i]] > usages[memory[i]]:
                     victim_i = i
             elif algorithm == LRU:
+                # Select memory as the victim if it was used farther back than the currently selected victim
                 if last_usage[memory[victim_i]] > last_usage[memory[i]]:
                     victim_i = i
             elif algorithm == OPT:
+                # Select memory as the victim if it won't be used for a longer amount of time than the currently selected victim
+                # Break ties by selecting lower numbered references
                 next_usage = find_next_usage(start_i, memory[i])
                 if victim_next_usage < next_usage or (victim_next_usage == next_usage and memory[victim_i] > memory[i]):
                     victim_i = i
                     victim_next_usage = next_usage
+        # After all frames have been checked and compared, return the current selection
         return victim_i
 
+    # Loop over all references
     print "Simulating %s with fixed frame size of %d" % (algorithm, F)
     for i in range(len(page_references)):
         ref = page_references[i]
         last_usage[ref] = i
+        # If the reference is not currently in memory, find a victim and replace it
         if ref not in usages:
             usages[ref] = 1
             victim_i = choose_victim(i)
@@ -131,6 +142,7 @@ def simulate_vm(page_references, algorithm):
             victim_string = "no victim page" if victim is None else "victim page %s" % (victim,)
             print "referencing page %s [%s] PAGE FAULT (%s)" % (ref, vm_memory_string(memory), victim_string)
         else:
+            # Keep track of the number of usages since the reference was added to memory for LFU
             usages[ref] += 1
     print "End of %s simulation (%d page faults)" % (algorithm, page_faults)
 
@@ -188,12 +200,14 @@ def simulate_non_contiguous(processes):
                     print_memory(memory)
                     continue
 
+                # Update memory
                 for i in page_table[process.id]:
                     memory[i] = process.id
 
                 print "time %dms: Placed process %s:" % (t, process.id)
                 print_memory(memory)
 
+                # Keep track of when the process will end
                 process_end_times[process.id] = t + process.arrival_times[t]
 
         # Check if all processes have completed
@@ -276,12 +290,14 @@ def simulate(processes, algorithm):
                         print_memory(memory)
                         continue
 
+                # Update memory
                 for i in range(chosen_partition[0], chosen_partition[1]):
                     memory[i] = process.id
                 process_partitions[process.id] = chosen_partition
                 print "time %dms: Placed process %s:" % (t + defragment_time, process.id)
                 print_memory(memory)
 
+                # Record when the process will end
                 process_end_times[process.id] = t + process.arrival_times[t]
 
         # Check if all processes have completed
@@ -302,9 +318,11 @@ def simulate(processes, algorithm):
 def choose_partition(algorithm, process, empty_partitions):
     chosen_partition = None
     if algorithm == NEXT_FIT:
+        # Iterate over empty partitions and choose the first one found that fits the process
         for i in range(len(empty_partitions)):
             start, end = empty_partitions[i]
             partition_size = end - start
+            # When an empty partition is selected, resize or delete it accordingly
             if partition_size > process.size:
                 empty_partitions[i] = (start + process.size, end)
                 chosen_partition = (start, start + process.size)
@@ -314,6 +332,9 @@ def choose_partition(algorithm, process, empty_partitions):
                 chosen_partition = (start, end)
                 break
     elif algorithm == BEST_FIT or algorithm == WORST_FIT:
+        # Iterate over empty partitions and keep track of either the best or worst fit using chosen_i
+        # Replace chosen_i whenever a more suitable candidate is found. When the iteration is done, the
+        # best candidate will have been selected.
         chosen_i = None
         for i in range(len(empty_partitions)):
             start, end = empty_partitions[i]
@@ -328,6 +349,7 @@ def choose_partition(algorithm, process, empty_partitions):
                 chosen_partition = (start, start + process.size)
                 chosen_i = i
 
+        # When an empty partition is selected, resize or delete it accordingly
         if chosen_partition is not None:
             start, end = empty_partitions[chosen_i]
             partition_size = end - start
@@ -351,6 +373,7 @@ def print_memory(memory):
 
 
 def free_memory(empty_partitions):
+    # Calculate the amount of free memory available
     free = 0
     for start, end in empty_partitions:
         free += end - start
