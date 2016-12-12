@@ -10,10 +10,15 @@ t_memmove = 1  # Time to move one frame of memory
 total_mem = 256  # Maximum amount of memory
 mem_per_line = 32  # Memory displayed per line of output
 
+F = 3   # Number of frames for virtual memory
+
 NEXT_FIT = 'Contiguous -- Next-Fit'
 BEST_FIT = 'Contiguous -- Best-Fit'
 WORST_FIT = 'Contiguous -- Worst-Fit'
-NON_CONTIGUOUS = 'Non-contiguous'
+
+OPT = "OPT"
+LRU = "LRU"
+LFU = "LFU"
 
 class Process:
     def __init__(self, id, size, arrival_times):
@@ -28,7 +33,7 @@ def main():
         print >> sys.stderr, 'ERROR: Invalid arguments\nUSAGE: ./a.out <input-file> <vminput-file>'
         exit()
 
-    # Open input and output files
+    # Open and read input files
     input_name = sys.argv[1]
     input_f = open(input_name, 'r')
     processes = []
@@ -52,6 +57,14 @@ def main():
 
                 processes.append(Process(id, size, arrival_times))
 
+    page_references_name = sys.argv[2]
+    page_references_file = open(page_references_name, 'r')
+    page_references = []
+
+    for line in page_references_file:
+        for ref in line.split():
+            page_references.append(ref)
+
     simulate(processes, NEXT_FIT)
     print
     simulate(processes, BEST_FIT)
@@ -59,7 +72,52 @@ def main():
     simulate(processes, WORST_FIT)
     print
     simulate_non_contiguous(processes)
+    print
+    simulate_vm(page_references, LFU)
 
+
+def simulate_vm(page_references, algorithm):
+    memory = [None] * F
+    usages = {}
+    page_faults = 0
+
+    print "Simulating %s with fixed frame size of %d" % (algorithm, F)
+    for ref in page_references:
+        if ref not in usages:
+            usages[ref] = 1
+            victim_i = choose_victim(memory, usages, algorithm)
+            victim = memory[victim_i]
+            if victim is not None:
+                del usages[victim]
+            memory[victim_i] = ref
+
+            page_faults += 1
+            victim_string = "no victim page" if victim is None else "victim page %s" % (victim,)
+            print "referencing page %s [%s] PAGE FAULT (%s)" % (ref, vm_memory_string(memory), victim_string)
+        else:
+            usages[ref] += 1
+    print "End of %s simulation (%d page faults)" % (algorithm, page_faults)
+
+
+def choose_victim(memory, usages, algorithm):
+    victim_i = None
+    for i in range(F):
+        if memory[i] is None:
+            return i
+        if victim_i is None or usages[memory[victim_i]] > usages[memory[i]]:
+            victim_i = i
+    return victim_i
+
+
+def vm_memory_string(memory):
+    vm_memory = 'mem:'
+    for frame in memory:
+        vm_memory += ' '
+        if frame is None:
+            vm_memory += '.'
+        else:
+            vm_memory += frame
+    return vm_memory
 
 def simulate_non_contiguous(processes):
     global t
