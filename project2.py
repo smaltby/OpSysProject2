@@ -24,8 +24,8 @@ class Process:
 
 def main():
     global n
-    if len(sys.argv) != 2:
-        print >> sys.stderr, 'ERROR: Invalid arguments\nUSAGE: ./a.out <input-file>'
+    if len(sys.argv) != 3:
+        print >> sys.stderr, 'ERROR: Invalid arguments\nUSAGE: ./a.out <input-file> <vminput-file>'
         exit()
 
     # Open input and output files
@@ -57,9 +57,73 @@ def main():
     simulate(processes, BEST_FIT)
     print
     simulate(processes, WORST_FIT)
-    # print
-    # simulate(processes, NON_CONTIGUOUS)
+    print
+    simulate_non_contiguous(processes)
 
+
+def simulate_non_contiguous(processes):
+    global t
+
+    memory = [None] * total_mem
+
+    page_table = {}
+
+    process_end_times = {}
+
+    t = 0
+    print "time %dms: Simulator started (Non-contiguous)" % (t,)
+    while 1:
+         # Check arrivals and ends
+        for process in processes:
+            # Process is done, take it out of memory
+            if process.id in process_end_times and process_end_times[process.id] == t:
+                for i in page_table[process.id]:
+                    memory[i] = None
+                del page_table[process.id]
+                print "time %dms: Process %s removed:" % (t, process.id)
+                print_memory(memory)
+
+            # Process has arrived, attempt to add it to memory
+            if t in process.arrival_times:
+                print "time %dms: Process %s arrived (requires %d frames)" % (t, process.id, process.size)
+                page_table[process.id] = []
+
+                memory_to_add = process.size
+                for i in range(total_mem):
+                    if memory[i] is None:
+                        page_table[process.id].append(i)
+                        memory_to_add -= 1
+                        if memory_to_add == 0:
+                            break
+
+                # Not enough free memory for the process
+                if memory_to_add > 0:
+                    del page_table[process.id]
+                    print "time %dms: Cannot place process %s -- skipped!" % (t, process.id)
+                    print_memory(memory)
+                    continue
+
+                for i in page_table[process.id]:
+                    memory[i] = process.id
+
+                print "time %dms: Placed process %s:" % (t, process.id)
+                print_memory(memory)
+
+                process_end_times[process.id] = t + process.arrival_times[t]
+
+        # Check if all processes have completed
+        if len(page_table) == 0:
+            arriving = False
+            for process in processes:
+                for arrival_time in process.arrival_times:
+                    if arrival_time > t:
+                        arriving = True
+            if not arriving:
+                break
+
+        # Increment time
+        t += 1
+    print "time %dms: Simulator ended (Non-contiguous)" % (t,)
 
 def simulate(processes, algorithm):
     global t
@@ -111,7 +175,7 @@ def simulate(processes, algorithm):
                     free = free_memory(empty_partitions)
                     # If there is enough free memory to fit the process, defragment, otherwise, skip the process
                     if free >= process.size:
-                        print "time %dms: Cannot place process %s -- starting defragmentation!" % \
+                        print "time %dms: Cannot place process %s -- starting defragmentation" % \
                               (t + defragment_time, process.id)
                         frames_moved = defragment(memory, free, process_partitions, empty_partitions)
                         defragment_time += frames_moved * t_memmove
@@ -134,6 +198,7 @@ def simulate(processes, algorithm):
 
                 process_end_times[process.id] = t + process.arrival_times[t]
 
+        # Check if all processes have completed
         if len(empty_partitions) > 0 and empty_partitions[0] == (0, total_mem):
             arriving = False
             for process in processes:
@@ -142,6 +207,8 @@ def simulate(processes, algorithm):
                         arriving = True
             if not arriving:
                 break
+
+        # Increment time
         t += 1
     print "time %dms: Simulator ended (%s)" % (t + defragment_time, algorithm)
 
