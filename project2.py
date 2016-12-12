@@ -73,11 +73,11 @@ def main():
     print
     simulate_non_contiguous(processes)
     print
-    simulate_vm(page_references, LFU)
+    simulate_vm(page_references, OPT)
     print
     simulate_vm(page_references, LRU)
     print
-    simulate_vm(page_references, OPT)
+    simulate_vm(page_references, LFU)
 
 
 def simulate_vm(page_references, algorithm):
@@ -94,14 +94,14 @@ def simulate_vm(page_references, algorithm):
 
     def choose_victim(start_i):
         victim_i = None
-        next_usage = None
+        victim_next_usage = None
         for i in range(F):
             if memory[i] is None:
                 return i
             if victim_i is None:
                 victim_i = i
                 if algorithm == OPT:
-                    next_usage = find_next_usage(start_i, memory[victim_i])
+                    victim_next_usage = find_next_usage(start_i, memory[victim_i])
             elif algorithm == LFU:
                 if usages[memory[victim_i]] > usages[memory[i]]:
                     victim_i = i
@@ -109,8 +109,10 @@ def simulate_vm(page_references, algorithm):
                 if last_usage[memory[victim_i]] > last_usage[memory[i]]:
                     victim_i = i
             elif algorithm == OPT:
-                if next_usage < find_next_usage(start_i, memory[i]):
+                next_usage = find_next_usage(start_i, memory[i])
+                if victim_next_usage < next_usage or (victim_next_usage == next_usage and memory[victim_i] > memory[i]):
                     victim_i = i
+                    victim_next_usage = next_usage
         return victim_i
 
     print "Simulating %s with fixed frame size of %d" % (algorithm, F)
@@ -262,9 +264,9 @@ def simulate(processes, algorithm):
                         print "time %dms: Cannot place process %s -- starting defragmentation" % \
                               (t + defragment_time, process.id)
                         frames_moved = defragment(memory, free, process_partitions, empty_partitions)
-                        defragment_time += frames_moved * t_memmove
-                        print "time %dms: Defragmentation complete (moved %d frames: X, Y, Z)" % \
-                              (t + defragment_time, frames_moved)
+                        defragment_time += len(frames_moved) * t_memmove
+                        print "time %dms: Defragmentation complete (moved %d frames: %s)" % \
+                              (t + defragment_time, len(frames_moved), ', '.join(sorted(list(set(frames_moved)))))
                         print_memory(memory)
 
                         # Choose the partition again now that memory has been defragmented
@@ -356,8 +358,8 @@ def free_memory(empty_partitions):
 
 
 def defragment(memory, free, process_partitions, empty_partitions):
-    # Move frames to the lowest index empty slot in memory, keeping track of how many frames get moved
-    frames_moved = 0
+    # Move frames to the lowest index empty slot in memory, keeping track of which frames get moved
+    frames_moved = []
     empty = None
     for i in range(total_mem):
         frame = memory[i]
@@ -365,7 +367,7 @@ def defragment(memory, free, process_partitions, empty_partitions):
             memory[empty] = frame
             memory[i] = None
             empty += 1
-            frames_moved += 1
+            frames_moved.append(frame)
         elif frame is None and empty is None:
             empty = i
 
